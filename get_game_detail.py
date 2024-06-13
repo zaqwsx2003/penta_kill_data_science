@@ -1,11 +1,11 @@
 import os
-import requests
 import json
 import datetime
-import time
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
+import ast
+from requestWithHandlingHttperr import requestWithHandlingHttperr
 
 # 응답을 컬럼에맞춰 넣어 딕셔너리형태로 반환하는 함수입니다.
 # data 에는 request를 통해 얻은 데이터가 들어있고, flag에는 무슨 목적으로 이 함수를 호출했는지를 구분할 목적의 정수가 들어갑니다.
@@ -192,60 +192,96 @@ def getParticipantInfo(game_id):
         print(f"Failed to fetch data from game ID : {game_id},  Status code {apiResult.status_code}")
         return [str(game_id), apiResult.status_code]                # 비정상 응답이 온 game id를 리턴
     
-# try-except를 통해 서버로부터 10054에러가 떴을 때 잠시 기다렸다 재시도하는 루틴입니다.
-def requestWithHandlingHttperr(url, headers = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.75 Safari/537.36'}):
-    RETRY_COUNT = 12                # 기본 반복 12회
-    RETRY_DELAY_SEC = 10            # 대기 10초
-    ERRNO_10054 = 10054
-    ERRNO_500 = 500
-    ERRNO_503 = 503
-    ERRNO_504 = 504
+# 팀명과 소환사명이 공백 없이 붙어서 나와 문제가 생긴 데이터들이 일부 있습니다. 그걸 팀명과 소환사명으로 분리하기 위한 코드입니다.
+# 각 팀 5명의 선수에 대해 공통적으로 앞에 붙은 문자열은 팀명으로 간주합니다.
+# 일치하는 부분이 없으면 "", 0을 리턴합니다. 파라미터가 문자열이 아니면 "", -1을 리턴합니다.
+def find_common_prefix(strings):
+    if not strings:
+        return "", -1
 
-    REQUEST_INTERVAL_SEC = 0.1
+    # 짧은 문자 찾기
+    shortest = min(strings, key=len)
 
-    time.sleep(REQUEST_INTERVAL_SEC)    # 먼저 0.1초 쉬고
+    # 짧은 문자의 가장 긴 것으로 max값을 잡아 놓고
+    end_index = len(shortest)
 
-    for i in range(RETRY_COUNT):
-        try:
-            result = requests.get(url, headers = headers)       # API에 request 요청
-            result.raise_for_status()                           # http에러가 나오면 예외를 발생시킴 -> except로 점프
-            return result
-        except requests.exceptions.ConnectionError as e:
-            if isinstance(e.args[0], ConnectionResetError) and e.args[0].winerror == ERRNO_10054:
-                print(f"Attempt {i + 1} failed with error 10054. Retrying in {RETRY_DELAY_SEC} seconds...")
-                time.sleep(RETRY_DELAY_SEC)
-            else:                           # 다른 http 에러면
-                raise
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == ERRNO_500:
-                print(f"Attempt {i + 1} failed with 500 Internal Server Error. Retrying in {RETRY_DELAY_SEC} seconds...")
-                time.sleep(RETRY_DELAY_SEC)
-            elif e.response.status_code == ERRNO_503:
-                print(f"Attempt {i + 1} failed with 503 Service Unavailable. Retrying in {RETRY_DELAY_SEC} seconds...")
-                time.sleep(RETRY_DELAY_SEC)
-            elif e.response.status_code == ERRNO_504:
-                print(f"Attempt {i + 1} failed with 504 Gateway Timeout. Retrying in {RETRY_DELAY_SEC} seconds...")
-                time.sleep(RETRY_DELAY_SEC)
-            else:  # 다른 HTTPError 예외 처리
-                raise
-    # game_id = url[url.rfind("/") + 1:]
-    print(f"Failed to fetch data from url : {url} after {RETRY_COUNT} attempts.")
-    raise Exception(f"Failed to fetch data from url : {url} after {RETRY_COUNT} attempts")
+    for i in range(len(shortest)):  # 문자열의 첫 글자부터
+        current_char = shortest[i]
+        for string in strings:
+            if string[i] != current_char:
+                end_index = i
+                break
+        if end_index != len(shortest):
+            break
+
+    common_prefix = shortest[:end_index]
+    return common_prefix, end_index
+
+def seperateTeamNameFromSummonerName(df):
+    PARTICIPANTS_NUMBER_OF_A_TEAM = 5
+    blueSummonerNames = []
+    redSummonerNames = []
+    needed = True
+    
+    for i in range(PARTICIPANTS_NUMBER_OF_A_TEAM):
+        blueteam = str(df.at[0, f"teamCode_{i}"])
+        bluename = str(df.at[0, f"summonerName_{i}"])
+        redteam = str(df.at[0, f"teamCode_{i + PARTICIPANTS_NUMBER_OF_A_TEAM}"])
+        redname = str(df.at[0, f"summonerName_{i+PARTICIPANTS_NUMBER_OF_A_TEAM}"])
+        if len(blueteam) == 0 or len(bluename) == 0 or len(redteam) == 0 or len(redname) == 0:    # 플레이어 이름이 숫자라 int64타입으로 오는 녀석도 있음 (i.e. 500 걍 이름이 500임)
+            needed = False
+            continue
+        if blueteam != bluename[:-1]: needed = False
+        blueSummonerNames.append(bluename)
+
+        if redteam != redname[:-1]: needed = False
+        redSummonerNames.append(redname)
+
+    if needed == True:
+        blueteamName, blueteamWhere = find_common_prefix(blueSummonerNames)
+        redteamName, redteamWhere = find_common_prefix(redSummonerNames)
+
+        for i in range(PARTICIPANTS_NUMBER_OF_A_TEAM):
+            if blueteamWhere > 0:
+                df[f"teamCode_{i}"] = blueteamName
+                df[f"summonerName_{i}"] = df[f"summonerName_{i}"].apply(lambda x : x[redteamWhere:])
+            if redteamWhere > 0:
+                df[f"teamCode_{i+PARTICIPANTS_NUMBER_OF_A_TEAM}"] = redteamName
+                df[f"summonerName_{i+PARTICIPANTS_NUMBER_OF_A_TEAM}"] = df[f"summonerName_{i+PARTICIPANTS_NUMBER_OF_A_TEAM}"].apply(lambda x : x[redteamWhere:])
+    return df
+
+def removeAbnormalRows(df):
+    df = df.astype({"esportsTeamId_Blue":"str", "esportsTeamId_Red":"str", "blue_dragons":"str", "red_dragons":"str",\
+        "esportsPlayerId_0":"str", "esportsPlayerId_1":"str", "esportsPlayerId_2":"str", "esportsPlayerId_3":"str", "esportsPlayerId_4":"str",\
+            "esportsPlayerId_5":"str", "esportsPlayerId_6":"str", "esportsPlayerId_7":"str", "esportsPlayerId_8":"str", "esportsPlayerId_9":"str"})
+    df["timestamp"] = df["timestamp"].apply(lambda x : datetime.datetime.strptime(x[:19], "%Y-%m-%dT%H:%M:%S"))
+    blue_dragons_count = df["blue_dragons"].apply(lambda x : len(ast.literal_eval(x)))
+    df = pd.concat([df, blue_dragons_count.rename("blue_dragons_count")], axis=1)
+    red_dragons_count = df["red_dragons"].apply(lambda x : len(ast.literal_eval(x)))
+    df = pd.concat([df, red_dragons_count.rename("red_dragons_count")], axis=1)
+    df = df.copy()
+    non_zero_df = df[df["totalGoldEarned_0"] != 0]
+    drop_weird_second_df = non_zero_df[non_zero_df["timestamp"].dt.second % 10 == 0].reset_index(drop = True)
+    drop_weird_second_df["duration"] = drop_weird_second_df.index * 10
+    return drop_weird_second_df
 
 ###### 아래부턴 실행되는 부분 ######
 id_list = [0] # <- 요 부분에 원하는 숫자 넣고 돌리시면 됩니다.
+#TARGET_PATH = "../data/collected_data/"
+TARGET_PATH = "../data/collected_data_test/"
 for i in id_list:
-    game_ids = pd.read_excel(f"../data/game_ids/game_id_{i}.xlsx") 
+    #game_ids = pd.read_excel(f"../data/game_ids/game_id_{i}.xlsx") 
+    game_ids = pd.read_excel(f"../data/game_ids_for_test/game_id_for_test_{i}.xlsx")
 
     for idx, row in tqdm(game_ids.iterrows(), desc=f"Progress of game_id_{i}", total = len(game_ids)):  # 게임 번호를 하나씩 row에 넣어 분기를 돌립니다.
-        game_id = row["ID"]
+        game_id = row["gameId"]
         playerinfo = getParticipantInfo(game_id)                        # 플레이어 정보를 뽑아냄
         playerStatus = getGameStatusOrderedbyTime(game_id)              # 게임 상세 데이터를 뽑아냄
         playerinfo_list = []
         
         # data폴더 내에 xlsx 파일로 저장
         os.makedirs('../data', exist_ok=True)
-        os.makedirs('../data/collected_data', exist_ok=True)
+        os.makedirs(TARGET_PATH, exist_ok=True)
 
         if type(playerinfo) is list:                                # 정상적인 데이터가 모이지 않았을 때 getParticipantInfo()와 getGameStatusOrderedbyTime()은 List를 반환합니다.
             df = pd.Series(playerinfo).to_frame().T
@@ -255,7 +291,7 @@ for i in id_list:
                 df.columns = ["game_id", "status_code", "timestamp"]
             elif df.shape[1] == 4:                                  # 데이터를 한참 시간순서대로 받는 도중에 중복값이 많아 망했을 때
                 df.columns = ["game_id", "status_code", "last_game_state", "timestamp"]
-            df.to_excel(f'../data/collected_data/{game_id}_invalid.xlsx', index=False)
+            df.to_excel(f'{TARGET_PATH}{game_id}_invalid.xlsx', index=False)
         elif type(playerStatus) is list:
             df = pd.Series(playerStatus).to_frame().T
             if df.shape[1] == 2:                                    # 데이터 요청 처음부터 망했을 때
@@ -264,11 +300,16 @@ for i in id_list:
                 df.columns = ["game_id", "status_code", "timestamp"]
             elif df.shape[1] == 4:                                  # 데이터를 한참 시간순서대로 받는 도중에 중복값이 많아 망했을 때
                 df.columns = ["game_id", "status_code", "last_game_state", "timestamp"]
-            df.to_excel(f'../data/collected_data/{game_id}_invalid.xlsx', index=False)
+            df.to_excel(f'{TARGET_PATH}{game_id}_invalid.xlsx', index=False)
         else:                                                       # 정상이면
             for j in range(playerStatus.shape[0]):                  # concat을 위해 playerinfo를 아래로 복제해줌
                 playerinfo_list.append(playerinfo)
             playerinfo_df = pd.DataFrame(playerinfo_list)
             df = pd.concat([playerStatus, playerinfo_df], axis = 1)
-            df.to_excel(f'../data/collected_data/{game_id}.xlsx', index=False)
-    print(f"Collecting data from game_id_{i} is completed!")
+            df = seperateTeamNameFromSummonerName(df)
+            df = removeAbnormalRows(df)
+            if df.iloc[-1]["duration"] > 600: # 10분이내 끝난 경기는 제외함.
+                df.to_excel(f'{TARGET_PATH}{game_id}.xlsx', index=False)   
+            else:
+                df.to_excel(f'{TARGET_PATH}{game_id}_tooshort.xlsx', index=False)
+    #print(f"Collecting data from game_id_{i} is completed!")
