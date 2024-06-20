@@ -1,0 +1,12 @@
+pandas==2.2.1
+numpy==1.26.4
+beautifulsoup4==4.12.2
+tqdm==4.66.2
+requests==2.31.0
+scikit-learn==1.2.2
+matplotlib==3.8.4
+seaborn==0.13.2
+xgboost==2.0.3
+gunicorn==20.1.0
+flask==2.1.1
+werkzeug==2.0.3
