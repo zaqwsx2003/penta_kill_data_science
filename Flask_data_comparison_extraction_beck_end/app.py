@@ -8,6 +8,19 @@ from pitcheranalyze import pitcheranalyze
 import joblib
 import logging
 
+
+'''
+app.yaml 만들어야함 
+
+runtime: python39
+
+entrypoint: gunicorn -b :$PORT testmakedata:app
+
+handlers:
+  - url: /.*
+    script: auto
+
+'''
 app = Flask(__name__)
 
 # 로깅 설정
