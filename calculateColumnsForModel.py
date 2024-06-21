@@ -56,6 +56,7 @@ def getMedianOfCollectedData(): # 미리 저장된 파일을 불러와서 시리
     esportsPlayerId_type_dict = dict(zip(temp1, temp2))
     strcolumn_dict.update(esportsPlayerId_type_dict)
     df = pd.read_excel("../data/last_row_of_collected_datas.xlsx", dtype = strcolumn_dict)
+    #df = pd.read_excel("../data/last_row_of_collected_datas_of_test.xlsx", dtype = strcolumn_dict)
     tqdm.pandas()
     new_df = df.progress_apply(lambda row : calculateColumnsForModel(row), axis=1)
     #avgs = new_df.describe().loc["mean"][new_df.describe().shape[1] - 25:]

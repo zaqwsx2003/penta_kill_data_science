@@ -6,6 +6,7 @@ import os
 from tqdm import tqdm
 
 DETAIL_PATH = "../data/collected_data/"
+#DETAIL_PATH = "../data/collected_data_test/"
 PARTICIPANT_NUMBER_OF_A_TEAM = 5
 file_list = os.listdir(DETAIL_PATH)
 table = []
@@ -37,5 +38,6 @@ columns_for_df.extend(columns)
 last_row_df.columns = columns_for_df
 
 last_row_df.to_excel("../data/last_row_of_collected_datas.xlsx", index = False)
+#last_row_df.to_excel("../data/last_row_of_collected_datas_of_test.xlsx", index = False)
         
         

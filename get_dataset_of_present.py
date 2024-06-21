@@ -21,10 +21,12 @@ temp2 = ["str" for i in range(10)]
 esportsPlayerId_type_dict = dict(zip(esportsPlayerIds_columns, temp2))
 strcolumn_dict.update(esportsPlayerId_type_dict)
 game_ids_df = pd.read_excel("../data/game_ids.xlsx", dtype=strcolumn_dict, index_col = 0)
+#game_ids_df = pd.read_excel("../data/game_ids_for_test.xlsx", dtype=strcolumn_dict, index_col = 0)
 strcolumn_dict = {"gameId":"str", "esportsTeamId_Blue":"str", "esportsTeamId_Red":"str"}
 esportsPlayerId_type_dict = dict(zip(esportsPlayerIds_columns, temp2))
 strcolumn_dict.update(esportsPlayerId_type_dict)
 last_row_of_collected_datas_df = pd.read_excel("../data/last_row_of_collected_datas.xlsx", dtype = strcolumn_dict)
+#last_row_of_collected_datas_df = pd.read_excel("../data/last_row_of_collected_datas_of_test.xlsx", dtype = strcolumn_dict)
 
 #이거 넣어야 됨. id에 널값이 있는 게임은 누군지도 모르니까 걍 제외.
 included_all_ids_df = game_ids_df[game_ids_df["esportsPlayerId_0"].notna() & game_ids_df["esportsPlayerId_1"].notna() & game_ids_df["esportsPlayerId_2"].notna() &\
@@ -193,4 +195,5 @@ data_dict = {
 }
 
 with open('../data/present_data.pkl', 'wb') as f:
+#with open('../data/present_data_for_test.pkl', 'wb') as f:
     pickle.dump(data_dict, f)
