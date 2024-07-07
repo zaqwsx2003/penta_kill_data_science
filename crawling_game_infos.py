@@ -5,17 +5,19 @@ import pandas as pd
 import numpy as np
 import json
 from requestWithHandlingHttperr import requestWithHandlingHttperr
+from common_constants import PARTICIPANTS_NUMBER_OF_A_TEAM
 
-NUMBER_OF_PLAYERS_OF_A_TEAM = 5
 team_code = {}
 
+
+# 미리 준비된 링크를 바탕으로 매치 기록 페이지를 들어가서 원하는 정보를 스크래핑해오는 함수.
 def scrapInAPage(tournament_link):
     result = []
     if tournament_link is not np.nan:
         match_history = tournament_link + "/Match_History"
 
         response = requestWithHandlingHttperr(match_history)
-        soup = BeautifulSoup(response.text, "html.parser")
+        soup = BeautifulSoup(response.text, "html.parser")      # BeautifulSoup4를 사용.
 
         tournament_heading = soup.find("h1", attrs={"id":"firstHeading"}).text
         hyphen_where = tournament_heading.find("-")
@@ -41,7 +43,7 @@ def scrapInAPage(tournament_link):
                 "redteam" : redteam,
                 "winner_side" : winner_side
             }
-            if blueteam == "Beşiktaş Esports": row["blueteam"] = "Besiktas Esports"                     # 터키팀 특수문자를 알파벳으로 변경해보자.
+            if blueteam == "Beşiktaş Esports": row["blueteam"] = "Besiktas Esports"                     # 터키팀 특수문자가 인식이 안 되는 문제가 있다. 비슷한 알파벳으로 변경해보자.
             if blueteam == "Beşiktaş.Oyun Hizmetleri": row["blueteam"] = "Besiktas.Oyun Hizmetleri"
             if blueteam == "Fenerbahçe Esports": row["blueteam"] = "Fenerbahce Esports"
             if redteam == "Beşiktaş Esports": row["redteam"] = "Besiktas Esports"
@@ -51,22 +53,22 @@ def scrapInAPage(tournament_link):
             for idx, ban in enumerate(data[5].find_all("span")):
                 row[f"ban_{idx}"] = ban.attrs["title"]
             for idx, ban in enumerate(data[6].find_all("span")):
-                row[f"ban_{idx + NUMBER_OF_PLAYERS_OF_A_TEAM}"] = ban.attrs["title"]
+                row[f"ban_{idx + PARTICIPANTS_NUMBER_OF_A_TEAM}"] = ban.attrs["title"]
             for idx, pick in enumerate(data[7].find_all("span")):
                 row[f"pick_{idx}"] = pick.attrs["title"]
             for idx, pick in enumerate(data[8].find_all("span")):
-                row[f"pick_{idx + NUMBER_OF_PLAYERS_OF_A_TEAM}"] = pick.attrs["title"]
+                row[f"pick_{idx + PARTICIPANTS_NUMBER_OF_A_TEAM}"] = pick.attrs["title"]
             for idx, summoner in enumerate(data[9].find_all("a")):
                 row[f"summonerName_{idx}"] = summoner.text
             for idx, summoner in enumerate(data[10].find_all("a")):
-                row[f"summonerName_{idx + NUMBER_OF_PLAYERS_OF_A_TEAM}"] = summoner.text
+                row[f"summonerName_{idx + PARTICIPANTS_NUMBER_OF_A_TEAM}"] = summoner.text
 
             result.append(row)
     return pd.DataFrame(result)
 
 ###### 실행되는 부분 ######
 result = pd.DataFrame()
-df = pd.read_excel("../data/pentakill 경기 상세데이터 수집기록.xlsx", sheet_name="경기 세부 링크")
+df = pd.read_excel("../data/pentakill 경기 상세데이터 수집기록.xlsx", sheet_name="경기 세부 링크")      # 미리 찾아놓은 링크가 들어있는 파일
 
 for idx, row in tqdm(df.iterrows(), total = df.shape[0]):
     links = []
@@ -87,7 +89,7 @@ for idx, row in tqdm(df.iterrows(), total = df.shape[0]):
         scrapped_df = pd.concat([scrapped_df, info_fromapi_df], axis = 1)
         result = pd.concat([result, scrapped_df], axis = 0, ignore_index=True)
 
-with open('../data/team_code.json', 'r') as f:
+with open('../data/team_code.json', 'r') as f:      # 코드명으로 api데이터와 크롤링된 데이터를 매칭시키려는 시도를 해봤다.
     team_code_map = json.load(f)
 result['blueteam_code'] = result['blueteam'].apply(lambda x : team_code_map.get(x, np.nan))
 result['redteam_code'] = result['redteam'].apply(lambda x : team_code_map.get(x, np.nan))

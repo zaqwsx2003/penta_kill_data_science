@@ -2,6 +2,7 @@ import pandas as pd
 from calculateColumnsForModel import numberToRoleName
 from pitcheranalyze import pitcheranalyze
 import joblib
+from common_constants import PITCHERS_NUMBER_OF_A_PLAYER, STAT_MEDIAN_MULTIPLIER
 
 def getMedian(flag, role):
     role = role % 5
@@ -61,7 +62,7 @@ def getMedian(flag, role):
                 "wardsScorePerTime" : 0.0441531378196736,
                 "goldEarnedPerTime" : 4.00327956989247
             }
-    else:               # 테스트용 2군데이터는 flag : 1 로 줘보자
+    else:               # 테스트용 2군데이터의 중간값들.
         if role == 0:
             median = {
                 "kda" : 3.83333333333333,
@@ -121,19 +122,19 @@ def getMedian(flag, role):
     return median
 
 def getPredictData(match):
-    PITCHERS_NUMBER_OF_A_PLAYER = 8         # 플레이어 스탯 갯수
     players_form_df = None
-    STAT_MEDIAN_MULTIPLIER = 0.7
-    present_data = joblib.load('../data/present_data.pkl')
+    present_data = joblib.load('../data/present_data.pkl')                  # 현재기준 팀과 선수의 수치를 모아놓은 딕셔너리파일
     #present_data = joblib.load('../data/present_data_for_test.pkl')
-    model, scaler, X_columns = joblib.load('../data/model_draft5_7_1.pkl')
+    model, scaler, X_columns = joblib.load('../data/model_draft7_1_2.pkl')  # 모델을 불러옴.
     teams = match["teams"]
     blueteam = teams[0]
     redteam = teams[1]
     blueteam_id = blueteam["esportsTeamId"]
     redteam_id = redteam["esportsTeamId"]
     blueteam_players = blueteam["participantMetadata"]
-    redteam_players = redteam["participantMetadata"]
+    redteam_players = redteam["participantMetadata"]            # 입력 json데이터를 읽어들여 변수에 저장.
+
+    # 입력된 팀이 우리 present_data 딕셔너리에 있으면 가져오고, 없으면 중간값을 넣어줌.
     blue_winrate = present_data['team_history'][blueteam_id]["self"]["winrate"] if present_data["team_history"].get(blueteam_id) else 0.5
     blue_golddiff = present_data['team_history'][blueteam_id]["self"]["golddiff"] if present_data["team_history"].get(blueteam_id) else 0
     blue_killdiff = present_data['team_history'][blueteam_id]["self"]["killdiff"] if present_data["team_history"].get(blueteam_id) else 0
@@ -144,6 +145,7 @@ def getPredictData(match):
     red_golddiff = present_data['team_history'][redteam_id]["self"]["golddiff"] if present_data["team_history"].get(redteam_id) else 0
     red_killdiff = present_data['team_history'][redteam_id]["self"]["killdiff"] if present_data["team_history"].get(redteam_id) else 0
 
+    # 이 부분은 피벗테이블을 만들기 위해 컬럼이 될 부분을 인위적으로 데이터프레임 형식으로 만들어 붙여준 부분인데, 지금 생각해보니 피벗테이블이 필요 없었을지도 모르겠다. 양쪽 다 번거로울 수 있겠지만.
     columns_of_role = []
     for i in range(2):  # 블루팀과 레드팀 2개
         columns_of_role.extend(["Top" for j in range(PITCHERS_NUMBER_OF_A_PLAYER)])
@@ -160,14 +162,15 @@ def getPredictData(match):
         "role" : columns_of_role
     }
     columns_df = pd.DataFrame(columns_dict)
-    for idx, player in enumerate(blueteam_players):
+
+    for idx, player in enumerate(blueteam_players):     # 블루팀 선수 5명
         player_id = player["esportsPlayerId"]
         if present_data["player_form"].get(numberToRoleName(idx)) and present_data["player_form"][numberToRoleName(idx)].get(player_id, None) is not None:
-            player_form = present_data["player_form"][numberToRoleName(idx)][player_id]
+            player_form = present_data["player_form"][numberToRoleName(idx)][player_id]     # 선수 데이터가 있으면 불러옴.
         else:
-            median_player_dict = {key: value * STAT_MEDIAN_MULTIPLIER for key, value in getMedian(0, idx).items}
-            #median_player_dict = {key: value * STAT_MEDIAN_MULTIPLIER for key, value in getMedian(1, idx).items}
-            player_form = pd.DataFrame(median_player_dict, index=[0]).T
+            median_player_dict = {key: value * STAT_MEDIAN_MULTIPLIER for key, value in getMedian(0, idx).items()}    # 없으면 중간값의 0.7만큼을 채워줌
+            #median_player_dict = {key: value * STAT_MEDIAN_MULTIPLIER for key, value in getMedian(1, idx).items()}
+            player_form = pd.DataFrame(median_player_dict, index=[0]).T     # 피벗 테이블을 위해 형식 맞춰주는 부분.
             player_form.reset_index(inplace = True)
             player_form.columns = ["elements", "formvalue"]
         if players_form_df is None:
@@ -177,11 +180,11 @@ def getPredictData(match):
     for idx, player in enumerate(redteam_players):
         player_id = player["esportsPlayerId"]
         if present_data["player_form"].get(numberToRoleName(idx)) and present_data["player_form"][numberToRoleName(idx)].get(player_id, None) is not None:
-            player_form = present_data["player_form"][numberToRoleName(idx)][player_id]
+            player_form = present_data["player_form"][numberToRoleName(idx)][player_id]     # 선수 데이터가 있으면 불러옴.
         else:
-            median_player_dict = {key: value * STAT_MEDIAN_MULTIPLIER for key, value in getMedian(0, idx).items}
-            #median_player_dict = {key: value * STAT_MEDIAN_MULTIPLIER for key, value in getMedian(1, idx).items}
-            player_form = pd.DataFrame(median_player_dict, index=[0]).T
+            median_player_dict = {key: value * STAT_MEDIAN_MULTIPLIER for key, value in getMedian(0, idx).items()}    # 없으면 중간값의 0.7만큼을 채워줌.
+            #median_player_dict = {key: value * STAT_MEDIAN_MULTIPLIER for key, value in getMedian(1, idx).items()}
+            player_form = pd.DataFrame(median_player_dict, index=[0]).T     # 피벗 테이블을 위해 형식 맞춰주는 부분.
             player_form.reset_index(inplace = True)
             player_form.columns = ["elements", "formvalue"]
         if players_form_df is None:
@@ -190,13 +193,13 @@ def getPredictData(match):
             players_form_df = pd.concat([players_form_df, player_form], ignore_index = True)
     players_form_df = pd.concat([columns_df, players_form_df], axis=1, ignore_index=True)
     players_form_df.columns = ["matchId", "side", "role", "elements", "formvalue"]
-    players_form_df = pd.pivot_table(
+    players_form_df = pd.pivot_table(                           # 만들었다. 피벗테이블. 나중에 안 거지만 기계학습엔 평탄화된 테이블이 더 좋다고 한다.
         players_form_df,
         values="formvalue",
         index=["matchId"],
         columns=["side", "role", "elements"]
     ).reset_index()
-    players_form_df.columns = ['_'.join(col) if isinstance(col, tuple) else col for col in players_form_df.columns]
+    players_form_df.columns = ['_'.join(col) if isinstance(col, tuple) else col for col in players_form_df.columns] # 기껏 피벗테이블 만들어놓고 바로 평탄화...
     players_form_df["Blue_Winrate"] = blue_winrate
     players_form_df["Blue_GoldDiff"] = blue_golddiff
     players_form_df["Blue_KillDiff"] = blue_killdiff
@@ -207,18 +210,20 @@ def getPredictData(match):
     players_form_df["headtoHeadGoldDiff"] = headtohead_golddiff
     players_form_df["headtoHeadKillDiff"] = headtohead_killdiff
     players_form_df.rename(columns = {"matchId__" : "matchId"}, inplace = True)
-    players_form_df = pitcheranalyze(players_form_df)
+    players_form_df = pitcheranalyze(players_form_df)           # 피쳐 중 뺄건 빼고 넣을건 넣는 작업.
     players_form_df = players_form_df.drop(["matchId"], axis=1)
     players_form_df = players_form_df[X_columns]
     for column in players_form_df.columns:
         if column.find("_") != -1:
             suffix = column.split("_")[-1]
-            players_form_df[column] = scaler[suffix].transform(players_form_df[column].values.reshape(-1, 1))
+            players_form_df[column] = scaler[suffix].transform(players_form_df[column].values.reshape(-1, 1))       # 이게 사실 피벗테이블을 통해 달성하고자 했던 부분인데
+                                                                                                                    # 표준화 할 때 기계적으로 모든 컬럼의 평균과 편차를 구한 것이 아니라 kda면 kda, 골드면 골드 이렇게 같은 속성 전체를 묶어 평균과 편차를 구해 표준화를 시켰다.
+                                                                                                                    # 같은 suffix끼리 묶어 transform한 부분. fit은 데이터셋을 만들 때 했다.
     players_form_df["headtoHeadWinrate"] = scaler["headtoHeadWinrate"].transform(players_form_df["headtoHeadWinrate"].values.reshape(-1, 1))
     players_form_df["headtoHeadGoldDiff"] = scaler["headtoHeadGoldDiff"].transform(players_form_df["headtoHeadGoldDiff"].values.reshape(-1, 1))
     players_form_df["headtoHeadKillDiff"] = scaler["headtoHeadKillDiff"].transform(players_form_df["headtoHeadKillDiff"].values.reshape(-1, 1))
     players_form_df["teamWinrateDiff"] = scaler["teamWinrateDiff"].transform(players_form_df["teamWinrateDiff"].values.reshape(-1, 1))
     players_form_df["teamGoldDiff"] = scaler["teamGoldDiff"].transform(players_form_df["teamGoldDiff"].values.reshape(-1, 1))
     players_form_df["teamKillDiff"] = scaler["teamKillDiff"].transform(players_form_df["teamKillDiff"].values.reshape(-1, 1))
-    predict = model.predict_proba(players_form_df)
+    predict = model.predict_proba(players_form_df)          # 확률을 뽑아내는 부분.
     return predict

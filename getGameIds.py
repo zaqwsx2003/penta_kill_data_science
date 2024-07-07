@@ -5,14 +5,15 @@ import numpy as np
 import os
 from requestWithHandlingHttperr import requestWithHandlingHttperr
 
+# 토너먼트 리스트에서 상세데이터를 뽑아오기 위한 게임id를 추출하는 코드.
 def getGameIds():
     headers = {
-        "x-api-key" : "0TvQnueqKa5mxJntVWt0w4LpLfEkrV1Ta8rQBb9Z",
+        "x-api-key" : "0TvQnueqKa5mxJntVWt0w4LpLfEkrV1Ta8rQBb9Z",   # https://vickz84259.github.io/lolesports-api-docs/ 에 공개된 key라 코드에 넣어도 괜찮다.
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.75 Safari/537.36'
     }
     resultlist = []
-    # tournaments = pd.read_excel("../data/pentakill 경기 상세데이터 수집기록.xlsx", sheet_name= "경기 세부 링크")["id"] # 본 데이터
-    tournaments = pd.read_excel("../data/target_tournament_for_test.xlsx")["id"]        # 테스트 데이터 토너먼트 자료
+    tournaments = pd.read_excel("../data/pentakill 경기 상세데이터 수집기록.xlsx", sheet_name= "경기 세부 링크")["id"] # 본 데이터
+    #tournaments = pd.read_excel("../data/target_tournament_for_test.xlsx")["id"]        # 테스트 데이터 토너먼트 자료
     for tournament in tqdm(tournaments):
         apiResult = requestWithHandlingHttperr(f"https://prod-relapi.ewp.gg/persisted/gw/getCompletedEvents?hl=en-US&tournamentId={tournament}", headers=headers)
         if apiResult.status_code == 200:
@@ -99,5 +100,5 @@ game_ids = getGameIds() # 게임아이디가 들어간 리스트
 game_ids["patch"] = game_ids.progress_apply(lambda row : addPatch(row["gameId"]), axis=1)
 #game_ids = game_ids.progress_apply(lambda row : addPicksAndTeamCode(row), axis = 1)
 
-#game_ids.to_excel("../data/game_ids.xlsx", index=None)     # 본 데이터 뽑을 때
-game_ids.to_excel("../data/game_ids_for_test.xlsx", index=None) # 테스트 데이터 뽑을 때
+game_ids.to_excel("../data/game_ids.xlsx", index=None)     # 본 데이터 뽑을 때
+#game_ids.to_excel("../data/game_ids_for_test.xlsx", index=None) # 테스트 데이터 뽑을 때

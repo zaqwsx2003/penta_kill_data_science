@@ -6,6 +6,7 @@ import numpy as np
 from tqdm import tqdm
 import ast
 from requestWithHandlingHttperr import requestWithHandlingHttperr
+from common_constants import PARTICIPANTS_NUMBER_OF_A_TEAM
 
 # 응답을 컬럼에맞춰 넣어 딕셔너리형태로 반환하는 함수입니다.
 # data 에는 request를 통해 얻은 데이터가 들어있고, flag에는 무슨 목적으로 이 함수를 호출했는지를 구분할 목적의 정수가 들어갑니다.
@@ -13,7 +14,6 @@ from requestWithHandlingHttperr import requestWithHandlingHttperr
 #           1 : getWindow를 통해 받은 데이터일 경우
 #           2 : getWindow에서 플레이어 정보만 얻고 싶을 때
 def jsonParser(data, flag):
-    PARTICIPANT_NUMBER_OF_A_TEAM = 5                                                # 협곡에서 한팀에 들어가는 사람 수
     result_data = {}                                                                # 결과데이터가 들어갈 리스트 초기화
     # JSON 데이터 파싱
     json = data.json()
@@ -69,8 +69,8 @@ def jsonParser(data, flag):
                 result_data[f"currentHealth_{idx}"] = participant["currentHealth"]                  # 선수의 현재 체력
                 result_data[f"maxHealth_{idx}"] = participant["maxHealth"]                          # 선수의 최대 체력(풀피)
             for idx, participant in enumerate(redteam['participants']):
-                result_data[f"currentHealth_{idx + PARTICIPANT_NUMBER_OF_A_TEAM}"] = participant["currentHealth"]                  # 선수의 현재 체력
-                result_data[f"maxHealth_{idx + PARTICIPANT_NUMBER_OF_A_TEAM}"] = participant["maxHealth"]                          # 선수의 최대 체력(풀피)
+                result_data[f"currentHealth_{idx + PARTICIPANTS_NUMBER_OF_A_TEAM}"] = participant["currentHealth"]                  # 선수의 현재 체력
+                result_data[f"maxHealth_{idx + PARTICIPANTS_NUMBER_OF_A_TEAM}"] = participant["maxHealth"]                          # 선수의 최대 체력(풀피)
                 
     elif flag == 2:                                                                 # getWindow에서 플레이어 정보를 얻고 싶을때는 flag : 2
         # 필요한 데이터 추출
@@ -102,14 +102,14 @@ def jsonParser(data, flag):
                 blank_where = summonerName.find(" ")
                 team = summonerName[:blank_where]                                       # 팀 코드
                 name = summonerName[blank_where + 1:]                                   # 소환사명
-                result_data[f"esportsPlayerId_{idx + PARTICIPANT_NUMBER_OF_A_TEAM}"] = np.nan
+                result_data[f"esportsPlayerId_{idx + PARTICIPANTS_NUMBER_OF_A_TEAM}"] = np.nan
                 if player.get("esportsPlayerId") is not None:
-                    result_data[f"esportsPlayerId_{idx + PARTICIPANT_NUMBER_OF_A_TEAM}"] = player["esportsPlayerId"]    # 선수의 고유 ID
-                result_data[f"teamCode_{idx + PARTICIPANT_NUMBER_OF_A_TEAM}"] = team                                # 팀 코드
-                result_data[f"summonerName_{idx + PARTICIPANT_NUMBER_OF_A_TEAM}"] = name                            # 소환사명
-                result_data[f"side_{idx + PARTICIPANT_NUMBER_OF_A_TEAM}"] = "Red"                                   # 레드 진영이라는 뜻
-                result_data[f"role_{idx + PARTICIPANT_NUMBER_OF_A_TEAM}"] = player["role"]                          # 포지션(탑, 정글 등)
-                result_data[f"championName_{idx + PARTICIPANT_NUMBER_OF_A_TEAM}"] = player["championId"]            # 챔피언 이름
+                    result_data[f"esportsPlayerId_{idx + PARTICIPANTS_NUMBER_OF_A_TEAM}"] = player["esportsPlayerId"]    # 선수의 고유 ID
+                result_data[f"teamCode_{idx + PARTICIPANTS_NUMBER_OF_A_TEAM}"] = team                                # 팀 코드
+                result_data[f"summonerName_{idx + PARTICIPANTS_NUMBER_OF_A_TEAM}"] = name                            # 소환사명
+                result_data[f"side_{idx + PARTICIPANTS_NUMBER_OF_A_TEAM}"] = "Red"                                   # 레드 진영이라는 뜻
+                result_data[f"role_{idx + PARTICIPANTS_NUMBER_OF_A_TEAM}"] = player["role"]                          # 포지션(탑, 정글 등)
+                result_data[f"championName_{idx + PARTICIPANTS_NUMBER_OF_A_TEAM}"] = player["championId"]            # 챔피언 이름
 
     return result_data
 
@@ -217,8 +217,8 @@ def find_common_prefix(strings):
     common_prefix = shortest[:end_index]
     return common_prefix, end_index
 
+# 팀 코드를 summonerName에서 공백으로 구분된 것으로 추출하려고 하였으나, 개중 공백없이 그냥 붙어서 들어오는 데이터도 일부 있음. 그래서 common_prefix를 찾아 구분해 코드명을 추출하기 위한 코드.
 def seperateTeamNameFromSummonerName(df):
-    PARTICIPANTS_NUMBER_OF_A_TEAM = 5
     blueSummonerNames = []
     redSummonerNames = []
     needed = True
@@ -228,10 +228,11 @@ def seperateTeamNameFromSummonerName(df):
         bluename = str(df.at[0, f"summonerName_{i}"])
         redteam = str(df.at[0, f"teamCode_{i + PARTICIPANTS_NUMBER_OF_A_TEAM}"])
         redname = str(df.at[0, f"summonerName_{i+PARTICIPANTS_NUMBER_OF_A_TEAM}"])
-        if len(blueteam) == 0 or len(bluename) == 0 or len(redteam) == 0 or len(redname) == 0:    # 플레이어 이름이 숫자라 int64타입으로 오는 녀석도 있음 (i.e. 500 걍 이름이 500임)
+        # 플레이어 이름이 숫자라 int64타입으로 오는 녀석도 있음 (e.g. 500 걍 소환사이름이 500임)
+        if len(blueteam) == 0 or len(bluename) == 0 or len(redteam) == 0 or len(redname) == 0:      # 팀명이나 소환사명이 비어있는 경우는 고려하지 않는다.
             needed = False
             continue
-        if blueteam != bluename[:-1]: needed = False
+        if blueteam != bluename[:-1]: needed = False        # 공백으로 구분되어있지 않은 데이터 특징은 팀명으로 들어갈 칸이 소환사명에서 끝자리 하나 잘린것과 같이 나온다. 내가 데이터 추출을 어떻게 한 걸까.
         blueSummonerNames.append(bluename)
 
         if redteam != redname[:-1]: needed = False
@@ -239,7 +240,7 @@ def seperateTeamNameFromSummonerName(df):
 
     if needed == True:
         blueteamName, blueteamWhere = find_common_prefix(blueSummonerNames)
-        redteamName, redteamWhere = find_common_prefix(redSummonerNames)
+        redteamName, redteamWhere = find_common_prefix(redSummonerNames)            # 모든 선수가 이름 앞에 공통적으로 달고 나오는 문자들을 팀 코드라 간주.
 
         for i in range(PARTICIPANTS_NUMBER_OF_A_TEAM):
             if blueteamWhere > 0:
@@ -250,6 +251,7 @@ def seperateTeamNameFromSummonerName(df):
                 df[f"summonerName_{i+PARTICIPANTS_NUMBER_OF_A_TEAM}"] = df[f"summonerName_{i+PARTICIPANTS_NUMBER_OF_A_TEAM}"].apply(lambda x : x[redteamWhere:])
     return df
 
+# request에 대한 응답으로 원하지 않는 데이터가 들어온 것을 찾아내 걸러내고. 드래곤 잡은 데이터가 리스트 형태의 문자열로 나오는 걸 드래곤 잡은 누적 숫자로 변환시킨 컬럼을 추가한다.
 def removeAbnormalRows(df):
     df = df.astype({"esportsTeamId_Blue":"str", "esportsTeamId_Red":"str", "blue_dragons":"str", "red_dragons":"str",\
         "esportsPlayerId_0":"str", "esportsPlayerId_1":"str", "esportsPlayerId_2":"str", "esportsPlayerId_3":"str", "esportsPlayerId_4":"str",\
@@ -267,11 +269,11 @@ def removeAbnormalRows(df):
 
 ###### 아래부턴 실행되는 부분 ######
 id_list = [0] # <- 요 부분에 원하는 숫자 넣고 돌리시면 됩니다.
-#TARGET_PATH = "../data/collected_data/"
-TARGET_PATH = "../data/collected_data_test/"
+TARGET_PATH = "../data/collected_data/"
+#TARGET_PATH = "../data/collected_data_test/"
 for i in id_list:
-    #game_ids = pd.read_excel(f"../data/game_ids/game_id_{i}.xlsx") 
-    game_ids = pd.read_excel(f"../data/game_ids_for_test/game_id_for_test_{i}.xlsx")
+    game_ids = pd.read_excel(f"../data/game_ids/game_id_{i}.xlsx") 
+    #game_ids = pd.read_excel(f"../data/game_ids_for_test/game_id_for_test_{i}.xlsx")
 
     for idx, row in tqdm(game_ids.iterrows(), desc=f"Progress of game_id_{i}", total = len(game_ids)):  # 게임 번호를 하나씩 row에 넣어 분기를 돌립니다.
         game_id = row["gameId"]
